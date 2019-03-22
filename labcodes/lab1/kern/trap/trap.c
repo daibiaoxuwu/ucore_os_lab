@@ -180,7 +180,7 @@ trap_dispatch(struct trapframe *tf) {
 			//LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
 		case T_SWITCH_TOU:
             cprintf("+++ switch to  user  mode +++\n");
-			tf->tf_eflags |= FL_IOPL_MASK;
+			tf->tf_eflags ^= FL_IOPL_MASK;
 			tf->tf_cs = USER_CS;
 			tf->tf_ds = USER_DS;
 			tf->tf_es = USER_DS;
@@ -188,6 +188,7 @@ trap_dispatch(struct trapframe *tf) {
 			break;
 		case T_SWITCH_TOK:
             cprintf("+++ switch to kernel mode +++\n");
+			tf->tf_eflags ^= FL_IOPL_MASK;
 			tf->tf_cs = KERNEL_CS;
 			tf->tf_ds = KERNEL_DS;
 			tf->tf_es = KERNEL_DS;
