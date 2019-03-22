@@ -11,6 +11,24 @@
 
 #define TICK_NUM 100
 
+static void
+lab1_print_cur_status(void) {
+    static int round = 0;
+    uint16_t reg1, reg2, reg3, reg4;
+    asm volatile (
+            "mov %%cs, %0;"
+            "mov %%ds, %1;"
+            "mov %%es, %2;"
+            "mov %%ss, %3;"
+            : "=m"(reg1), "=m"(reg2), "=m"(reg3), "=m"(reg4));
+    cprintf("%d: @ring %d\n", round, reg1 & 3);
+    cprintf("%d:  cs = %x\n", round, reg1);
+    cprintf("%d:  ds = %x\n", round, reg2);
+    cprintf("%d:  es = %x\n", round, reg3);
+    cprintf("%d:  ss = %x\n", round, reg4);
+    round ++;
+}
+
 static void print_ticks() {
     cprintf("%d ticks\n",TICK_NUM);
 #ifdef DEBUG_GRADE
@@ -34,15 +52,11 @@ static struct pseudodesc idt_pd = {
 /* idt_init - initialize IDT to each of the entry points in kern/trap/vectors.S */
 void
 idt_init(void) {
-extern uintptr_t __vectors[];
-    for (int i = 0; i < 256; ++ i) {
-//      cprintf("vectors %d: 0x%08x\n", i, __vectors[i]);
-        if (i == T_SYSCALL || i == T_SWITCH_TOK) {
-            SETGATE(idt[i], 1, KERNEL_CS, __vectors[i], DPL_USER);
-        } else {
-            SETGATE(idt[i], 0, KERNEL_CS, __vectors[i], DPL_KERNEL);
-        }
-    }
+    extern uintptr_t __vectors[];
+    for (int i=0; i<256; i++) 
+        SETGATE(idt[i], 0, KERNEL_CS, __vectors[i], DPL_KERNEL);
+    SETGATE(idt[T_SYSCALL], 1, KERNEL_CS, __vectors[T_SYSCALL], DPL_USER);
+    SETGATE(idt[T_SWITCH_TOK], 1, KERNEL_CS, __vectors[T_SWITCH_TOK], DPL_USER);
     lidt(&idt_pd);
      /* LAB1 YOUR CODE : STEP 2 */
      /* (1) Where are the entry addrs of each Interrupt Service Routine (ISR)?
@@ -56,17 +70,6 @@ extern uintptr_t __vectors[];
       *     You don't know the meaning of this instruction? just google it! and check the libs/x86.h to know more.
 	  *     Notice: the argument of lidt is idt_pd. try to find it!
 	  */
-	extern uintptr_t __vectors[];
-	for (int i = 0; i < 256; ++ i) {
-		//		cprintf("vectors %d: 0x%08x\n", i, __vectors[i]);
-		if (i == T_SYSCALL || i == T_SWITCH_TOK) {
-			SETGATE(idt[i], 1, KERNEL_CS, __vectors[i], DPL_USER);
-		} else {
-			SETGATE(idt[i], 0, KERNEL_CS, __vectors[i], DPL_KERNEL);
-		}
-	}
-	lidt(&idt_pd);
-
 }
 
 static const char *
@@ -173,32 +176,47 @@ trap_dispatch(struct trapframe *tf) {
                 ticks=0;
             }
 			break;
-		case IRQ_OFFSET + IRQ_COM1:
-			c = cons_getc();
-			cprintf("serial [%03d] %c\n", c, c);
-			break;
-		case IRQ_OFFSET + IRQ_KBD:
+        case IRQ_OFFSET + IRQ_COM1:
+            c = cons_getc();
+            cprintf("serial [%03d] %c\n", c, c);
+            break;
+        case IRQ_OFFSET + IRQ_KBD:
 			c = cons_getc();
 			cprintf("kbd [%03d] %c\n", c, c);
+			if (c == '0') {
+				struct trapframe tf2;
+				memcpy(&tf2,&tf,sizeof(struct trapframe));
+				tf2.tf_trapno=T_SWITCH_TOK;
+                trap_dispatch(&tf2);
+			} else if (c == '3') {
+				struct trapframe tf2;
+				memcpy(&tf2,&tf,sizeof(struct trapframe));
+				tf2.tf_trapno=T_SWITCH_TOU;
+                trap_dispatch(&tf2);
+			}
 			break;
 			//LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
- case T_SWITCH_TOU:
-        if (tf->tf_cs != USER_CS) {
-            tf->tf_cs = USER_CS;
-            tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
-            tf->tf_eflags |= FL_IOPL_MASK;
-        }
-        break;
-    case T_SWITCH_TOK:
-        if (tf->tf_cs != KERNEL_CS) {
-            tf->tf_cs = KERNEL_CS;
-            tf->tf_ds = tf->tf_es = tf->tf_ss = KERNEL_DS;
-        }
-        break;
-//		case T_SWITCH_TOU:
-//		case T_SWITCH_TOK:
-//			panic("T_SWITCH_** ??\n");
-//			break;
+		case T_SWITCH_TOU:
+            lab1_print_cur_status();
+            cprintf("+++ switch to  user  mode +++\n");
+			tf->tf_eflags |= FL_IOPL_MASK;
+			tf->tf_cs = USER_CS;
+			tf->tf_ds = USER_DS;
+			tf->tf_es = USER_DS;
+			tf->tf_ss = USER_DS;
+            lab1_print_cur_status();
+			break;
+		case T_SWITCH_TOK:
+            lab1_print_cur_status();
+            cprintf("+++ switch to kernel mode +++\n");
+			tf->tf_cs = KERNEL_CS;
+			tf->tf_ds = KERNEL_DS;
+            lab1_print_cur_status();
+			break;
+			//		case T_SWITCH_TOU:
+			//		case T_SWITCH_TOK:
+			//			panic("T_SWITCH_** ??\n");
+			//			break;
 		case IRQ_OFFSET + IRQ_IDE1:
 		case IRQ_OFFSET + IRQ_IDE2:
 			/* do nothing */
