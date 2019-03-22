@@ -11,24 +11,6 @@
 
 #define TICK_NUM 100
 
-static void
-lab1_print_cur_status(void) {
-    static int round = 0;
-    uint16_t reg1, reg2, reg3, reg4;
-    asm volatile (
-            "mov %%cs, %0;"
-            "mov %%ds, %1;"
-            "mov %%es, %2;"
-            "mov %%ss, %3;"
-            : "=m"(reg1), "=m"(reg2), "=m"(reg3), "=m"(reg4));
-    cprintf("%d: @ring %d\n", round, reg1 & 3);
-    cprintf("%d:  cs = %x\n", round, reg1);
-    cprintf("%d:  ds = %x\n", round, reg2);
-    cprintf("%d:  es = %x\n", round, reg3);
-    cprintf("%d:  ss = %x\n", round, reg4);
-    round ++;
-}
-
 static void print_ticks() {
     cprintf("%d ticks\n",TICK_NUM);
 #ifdef DEBUG_GRADE
@@ -197,21 +179,19 @@ trap_dispatch(struct trapframe *tf) {
 			break;
 			//LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
 		case T_SWITCH_TOU:
-            lab1_print_cur_status();
             cprintf("+++ switch to  user  mode +++\n");
 			tf->tf_eflags |= FL_IOPL_MASK;
 			tf->tf_cs = USER_CS;
 			tf->tf_ds = USER_DS;
 			tf->tf_es = USER_DS;
 			tf->tf_ss = USER_DS;
-            lab1_print_cur_status();
 			break;
 		case T_SWITCH_TOK:
-            lab1_print_cur_status();
             cprintf("+++ switch to kernel mode +++\n");
 			tf->tf_cs = KERNEL_CS;
 			tf->tf_ds = KERNEL_DS;
-            lab1_print_cur_status();
+			tf->tf_es = KERNEL_DS;
+			tf->tf_ss = KERNEL_DS;
 			break;
 			//		case T_SWITCH_TOU:
 			//		case T_SWITCH_TOK:
