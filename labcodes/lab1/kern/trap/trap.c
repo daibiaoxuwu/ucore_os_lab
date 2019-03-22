@@ -34,6 +34,16 @@ static struct pseudodesc idt_pd = {
 /* idt_init - initialize IDT to each of the entry points in kern/trap/vectors.S */
 void
 idt_init(void) {
+extern uintptr_t __vectors[];
+    for (int i = 0; i < 256; ++ i) {
+//      cprintf("vectors %d: 0x%08x\n", i, __vectors[i]);
+        if (i == T_SYSCALL || i == T_SWITCH_TOK) {
+            SETGATE(idt[i], 1, KERNEL_CS, __vectors[i], DPL_USER);
+        } else {
+            SETGATE(idt[i], 0, KERNEL_CS, __vectors[i], DPL_KERNEL);
+        }
+    }
+    lidt(&idt_pd);
      /* LAB1 YOUR CODE : STEP 2 */
      /* (1) Where are the entry addrs of each Interrupt Service Routine (ISR)?
       *     All ISR's entry addrs are stored in __vectors. where is uintptr_t __vectors[] ?
@@ -172,10 +182,23 @@ trap_dispatch(struct trapframe *tf) {
 			cprintf("kbd [%03d] %c\n", c, c);
 			break;
 			//LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
-		case T_SWITCH_TOU:
-		case T_SWITCH_TOK:
-			panic("T_SWITCH_** ??\n");
-			break;
+ case T_SWITCH_TOU:
+        if (tf->tf_cs != USER_CS) {
+            tf->tf_cs = USER_CS;
+            tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
+            tf->tf_eflags |= FL_IOPL_MASK;
+        }
+        break;
+    case T_SWITCH_TOK:
+        if (tf->tf_cs != KERNEL_CS) {
+            tf->tf_cs = KERNEL_CS;
+            tf->tf_ds = tf->tf_es = tf->tf_ss = KERNEL_DS;
+        }
+        break;
+//		case T_SWITCH_TOU:
+//		case T_SWITCH_TOK:
+//			panic("T_SWITCH_** ??\n");
+//			break;
 		case IRQ_OFFSET + IRQ_IDE1:
 		case IRQ_OFFSET + IRQ_IDE2:
 			/* do nothing */
